@@ -1,0 +1,94 @@
+{
+  "dk_agent": "127.0.0.1:9529",
+  "sender": {
+    "threads": 100,
+    "send_count": 1000
+  },
+  "service": "dktrace-dd-agent",
+  "dump_size": 4096,
+  "trace": [
+    {
+      "resource": "/get/user/name",
+      "operation": "user.getUserName",
+      "span_type": "web",
+      "duration": 300,
+      "children": [
+        {
+          "resource": "/authenticate",
+          "operation": "user.auth",
+          "span_type": "web",
+          "duration": 200,
+          "children": [
+            {
+              "resource": "/get/user/id",
+              "operation": "user.id",
+              "span_type": "web",
+              "duration": 300,
+              "children": [
+                {
+                  "resource": "/get/user/school",
+                  "operation": "user.school",
+                  "span_type": "web",
+                  "duration": 200,
+                  "children": [
+                    {
+                      "resource": "/get/user/class",
+                      "operation": "user.class",
+                      "span_type": "web",
+                      "duration": 200,
+                      "children": [
+                        {
+                          "resource": "/get/user/number",
+                          "operation": "user.number",
+                          "span_type": "web",
+                          "duration": 200,
+                          "tags": [
+                            {
+                              "key": "group-access-token",
+                              "value": "kjskdafhcFertyuiknbvj"
+                            }
+                          ]
+                        },
+                        {
+                          "resource": "/get/user/score",
+                          "operation": "user.score",
+                          "span_type": "web",
+                          "duration": 200,
+                          "error": "access deny"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": "redis.set",
+      "operation": "set",
+      "span_type": "cache",
+      "duration": 150,
+      "tags": [
+        {
+          "key": "ttl",
+          "value": 3690
+        }
+      ]
+    },
+    {
+      "resource": "select name, age, ts from 'user' where id=5678765678",
+      "operation": "mysql.query",
+      "span_typ": "db",
+      "duration": 300,
+      "tags": [
+        {
+          "key": "db.shard",
+          "value": "xxx-xx-xxxx-xx"
+        }
+      ]
+    }
+  ]
+}
