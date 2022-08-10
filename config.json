@@ -4,8 +4,10 @@
     "threads": 100,
     "send_count": 1000
   },
-  "service": "dktrace-dd-agent",
-  "dump_size": 4096,
+  "service": "dktrace-zipkin-agent",
+  "encode": "protobuf3",
+  "dump_size": 1024,
+  "random_dump": true,
   "trace": [
     {
       "resource": "/get/user/name",
