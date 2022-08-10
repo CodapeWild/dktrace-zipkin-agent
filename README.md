@@ -19,7 +19,7 @@ The features include:
     "threads": 1,
     "send_count": 1
   },
-  "service": "dktrace-dd-agent",
+  "service": "dktrace-zipkin-agent",
   "encode": "protobuf3",
   "dump_size": 1024,
   "random_dump": false,
@@ -49,8 +49,8 @@ The features include:
   "error": "access deny, status code 100010",
   "tags": [
     {
-      "key": "_dd.origin",
-      "value": "rum"
+      "key": "original_id",
+      "value": "7898-7897-3456788"
     }
   ],
   "children": []
