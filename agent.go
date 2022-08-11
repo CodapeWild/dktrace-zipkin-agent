@@ -64,11 +64,11 @@ func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.He
 	wg := sync.WaitGroup{}
 	wg.Add(sender.Threads)
 	for i := 0; i < sender.Threads; i++ {
-		go func(body io.Reader) {
+		go func(buf []byte) {
 			defer wg.Done()
 
 			for j := 0; j < sender.SendCount; j++ {
-				req, err := http.NewRequest(http.MethodPost, endpoint, body)
+				req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(buf))
 				if err != nil {
 					log.Println(err.Error())
 					continue
@@ -83,7 +83,7 @@ func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.He
 				log.Println(resp.Status)
 				resp.Body.Close()
 			}
-		}(bytes.NewBuffer(buf))
+		}(buf)
 	}
 	wg.Wait()
 
