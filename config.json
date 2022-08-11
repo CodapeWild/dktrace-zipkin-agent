@@ -1,8 +1,8 @@
 {
   "dk_agent": "127.0.0.1:9529",
   "sender": {
-    "threads": 100,
-    "send_count": 1000
+    "threads": 0,
+    "send_count": 0
   },
   "service": "dktrace-zipkin-agent",
   "encode": "protobuf3",

@@ -42,19 +42,22 @@ func handleZipkinData(resp http.ResponseWriter, req *http.Request) {
 
 	resp.WriteHeader(http.StatusOK)
 
+	if req.Header.Get("Content-Length") == "0" {
+		return
+	}
+
+	if cfg.Sender.Threads <= 0 || cfg.Sender.SendCount <= 0 {
+		close(globalCloser)
+
+		return
+	}
+
 	buf, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	if len(buf) <= 1 {
-		return
-	}
 
-	if cfg.Sender.Threads > 0 && cfg.Sender.SendCount > 0 {
-		go sendZipkinTask(cfg.Sender, buf, "http://"+cfg.DkAgent+zipv2, req.Header)
-	} else {
-		close(globalCloser)
-	}
+	go sendZipkinTask(cfg.Sender, buf, "http://"+cfg.DkAgent+zipv2, req.Header)
 }
 
 func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.Header) {

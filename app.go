@@ -66,7 +66,7 @@ func main() {
 		serializer = pbserializer.SpanSerializer{}
 	}
 
-	reporter := httpreporter.NewReporter("http://"+agentAddress+zipv2, httpreporter.Serializer(serializer))
+	reporter := NewReporter("http://"+agentAddress+zipv2, httpreporter.Serializer(serializer), httpreporter.BatchSize(1000))
 	defer reporter.Close()
 
 	tracer, err := zipkin.NewTracer(reporter)
@@ -92,6 +92,9 @@ func main() {
 
 	root, children := startRootSpan(tracer, cfg.Trace)
 	orchestrator(tracer, zipkin.NewContext(context.Background(), root), children)
+	root.Finish()
+
+	reporter.(*HTTPReporter).flush()
 
 	<-globalCloser
 }
@@ -149,7 +152,6 @@ func startRootSpan(tracer *zipkin.Tracer, trace []*span) (root zipkin.Span, chil
 		if err != nil {
 			root.Tag("err", err.Error())
 		}
-		root.Finish()
 	}(root, d, err)
 
 	return
