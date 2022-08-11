@@ -80,8 +80,8 @@ func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.He
 					log.Println(err.Error())
 					continue
 				}
-				resp.Body.Close()
 				log.Println(resp.Status)
+				resp.Body.Close()
 			}
 		}(bytes.NewBuffer(buf))
 	}
