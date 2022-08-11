@@ -64,5 +64,5 @@ The features include:
 - `span_type`: Span type [app cache custom db web]
 - `duration`: how long an operation process will last
 - `error`: error string
-- `tags`: Span meta data used to set tags
+- `tags`: Span meta data, imitate client tags
 - `children`: child Spans represent a subsequent function calling from current `operation`

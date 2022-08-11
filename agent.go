@@ -42,19 +42,22 @@ func handleZipkinData(resp http.ResponseWriter, req *http.Request) {
 
 	resp.WriteHeader(http.StatusOK)
 
+	if req.Header.Get("Content-Length") == "0" {
+		return
+	}
+
+	if cfg.Sender.Threads <= 0 || cfg.Sender.SendCount <= 0 {
+		close(globalCloser)
+
+		return
+	}
+
 	buf, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	if len(buf) <= 1 {
-		return
-	}
 
-	if cfg.Sender.Threads > 0 && cfg.Sender.SendCount > 0 {
-		go sendZipkinTask(cfg.Sender, buf, "http://"+cfg.DkAgent+zipv2, req.Header)
-	} else {
-		close(globalCloser)
-	}
+	go sendZipkinTask(cfg.Sender, buf, "http://"+cfg.DkAgent+zipv2, req.Header)
 }
 
 func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.Header) {
@@ -65,7 +68,7 @@ func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.He
 			defer wg.Done()
 
 			for j := 0; j < sender.SendCount; j++ {
-				req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(buf))
+				req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(buf))
 				if err != nil {
 					log.Println(err.Error())
 					continue
@@ -77,8 +80,8 @@ func sendZipkinTask(sender *sender, buf []byte, endpoint string, headers http.He
 					log.Println(err.Error())
 					continue
 				}
-				resp.Body.Close()
 				log.Println(resp.Status)
+				resp.Body.Close()
 			}
 		}(buf)
 	}
