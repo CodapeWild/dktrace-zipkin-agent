@@ -6,7 +6,7 @@ This tool used to send standard Zipkin tracing data to Datakit.
 
 The features include:
 
-- build with standard Zipkin Golang lib
+- build with [standard Zipkin Golang lib](github.com/openzipkin/zipkin-go)
 - customized Span data
 - configurable multi-thread pressure test
 
