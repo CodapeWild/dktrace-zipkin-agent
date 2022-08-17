@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-var (
-	globalCloser = make(chan struct{})
-	zipv2        = "/api/v2/spans"
-)
-
 func startAgent() {
 	log.Printf("### start Zipkin agent %s\n", agentAddress)
 

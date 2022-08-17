@@ -21,7 +21,9 @@ import (
 
 var (
 	cfg          *config
+	globalCloser = make(chan struct{})
 	agentAddress = "127.0.0.1:"
+	zipv2        = "/api/v2/spans"
 )
 
 type sender struct {
