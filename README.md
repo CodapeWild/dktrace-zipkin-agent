@@ -12,6 +12,8 @@ The features include:
 
 ## Config
 
+**Config structure in `config.json`**
+
 ```json
 {
   "dk_agent": "127.0.0.1:9529",
@@ -37,6 +39,8 @@ The features include:
 - `trace`: represents a Trace consists of Spans
 
 ## Span Structure
+
+**Span structure in `config.json`**
 
 `trace`\[span...\]
 
