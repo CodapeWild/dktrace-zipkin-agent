@@ -71,7 +71,12 @@ func main() {
 	reporter := NewReporter("http://"+agentAddress+zipv2, httpreporter.Serializer(serializer), httpreporter.BatchSize(1000))
 	defer reporter.Close()
 
-	tracer, err := zipkin.NewTracer(reporter)
+	endpoint, err := zipkin.NewEndpoint(cfg.Service, agentAddress)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	tracer, err := zipkin.NewTracer(reporter, zipkin.WithLocalEndpoint(endpoint))
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
