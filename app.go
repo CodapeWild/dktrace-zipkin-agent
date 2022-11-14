@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	zipkin "github.com/openzipkin/zipkin-go"
@@ -48,13 +46,13 @@ type tag struct {
 }
 
 type span struct {
-	Resource  string  `json:"resource"`
-	Operation string  `json:"operation"`
-	SpanType  string  `json:"span_type"`
-	Duration  int64   `json:"duration"`
-	Error     string  `json:"error"`
-	Tags      []tag   `json:"tags"`
-	Children  []*span `json:"children"`
+	Resource  string        `json:"resource"`
+	Operation string        `json:"operation"`
+	SpanType  string        `json:"span_type"`
+	Duration  time.Duration `json:"duration"`
+	Error     string        `json:"error"`
+	Tags      []tag         `json:"tags"`
+	Children  []*span       `json:"children"`
 	dumpSize  int64
 }
 
@@ -99,6 +97,7 @@ func main() {
 
 	root, children := startRootSpan(tracer, cfg.Trace)
 	orchestrator(tracer, zipkin.NewContext(context.Background(), root), children)
+	time.Sleep(3 * time.Second)
 	root.Finish()
 
 	reporter.(*HTTPReporter).flush()
@@ -131,10 +130,7 @@ func setPerDumpSize(trace []*span, fillup int64, isRandom bool) {
 }
 
 func startRootSpan(tracer *zipkin.Tracer, trace []*span) (root zipkin.Span, children []*span) {
-	var (
-		d   int64
-		err error
-	)
+	var d time.Duration
 	if len(trace) == 1 {
 		root = tracer.StartSpan(trace[0].Operation)
 		root.Tag("resource.name", trace[0].Resource)
@@ -142,24 +138,22 @@ func startRootSpan(tracer *zipkin.Tracer, trace []*span) (root zipkin.Span, chil
 		for _, tag := range trace[0].Tags {
 			root.Tag(tag.Key, fmt.Sprintf("%v", tag.Value))
 		}
-		d = trace[0].Duration * int64(time.Millisecond)
+		d = trace[0].Duration * time.Millisecond
 		children = trace[0].Children
 		if len(trace[0].Error) != 0 {
-			err = errors.New(trace[0].Error)
+			root.Tag("error", trace[0].Error)
 		}
 	} else {
-		root = tracer.StartSpan("start_root_span")
-		d = int64(time.Duration(60+rand.Intn(300)) * time.Millisecond)
+		root = tracer.StartSpan("startRootSpan")
+		root.Tag("span.type", "web")
+		d = time.Duration(60+rand.Intn(300)) * time.Millisecond
 		children = trace
 	}
 
-	time.Sleep(time.Duration(d) / 2)
-	go func(root zipkin.Span, d int64, err error) {
-		time.Sleep(time.Duration(d) / 2)
-		if err != nil {
-			root.Tag("err", err.Error())
-		}
-	}(root, d, err)
+	time.Sleep(d / 2)
+	go func(root zipkin.Span, d time.Duration) {
+		time.Sleep(d / 2)
+	}(root, d)
 
 	return
 }
@@ -171,19 +165,14 @@ func orchestrator(tracer *zipkin.Tracer, ctx context.Context, children []*span) 
 			orchestrator(tracer, ctx, children[0].Children)
 		}
 	} else {
-		wg := sync.WaitGroup{}
-		wg.Add(len(children))
 		for k := range children {
 			go func(ctx context.Context, span *span) {
-				defer wg.Done()
-
 				ctx = startSpanFromContext(tracer, ctx, span)
 				if len(span.Children) != 0 {
 					orchestrator(tracer, ctx, span.Children)
 				}
 			}(ctx, children[k])
 		}
-		wg.Wait()
 	}
 }
 
@@ -211,7 +200,7 @@ func startSpanFromContext(tracer *zipkin.Tracer, ctx context.Context, span *span
 		zipspan.Tag("err", span.Error)
 	}
 
-	time.Sleep(time.Duration(span.Duration * int64(time.Millisecond)))
+	time.Sleep(span.Duration * time.Millisecond)
 
 	zipspan.Finish()
 
@@ -230,6 +219,9 @@ func init() {
 	cfg = &config{}
 	if err = json.Unmarshal(data, cfg); err != nil {
 		log.Fatalln(err.Error())
+	}
+	if len(cfg.Trace) == 0 {
+		log.Fatalln("empty trace")
 	}
 
 	rand.Seed(time.Now().UnixNano())
