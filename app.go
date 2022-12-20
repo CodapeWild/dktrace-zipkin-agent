@@ -12,14 +12,14 @@ import (
 	"time"
 
 	zipkin "github.com/openzipkin/zipkin-go"
-	pbserializer "github.com/openzipkin/zipkin-go/proto/zipkin_proto3"
+	zpkprotov2 "github.com/openzipkin/zipkin-go/proto/v2"
 	"github.com/openzipkin/zipkin-go/reporter"
 	httpreporter "github.com/openzipkin/zipkin-go/reporter/http"
 )
 
 var (
 	cfg          *config
-	globalCloser = make(chan struct{})
+	globalCloser chan struct{}
 	agentAddress = "127.0.0.1:"
 	zipv2        = "/api/v2/spans"
 )
@@ -56,6 +56,34 @@ type span struct {
 	dumpSize  int64
 }
 
+func (sp *span) startSpanFromContext(tracer *zipkin.Tracer, ctx context.Context) (zipkin.Span, context.Context) {
+	zpkspan, ctx := tracer.StartSpanFromContext(ctx, sp.Operation)
+
+	zpkspan.Tag("resource.name", sp.Resource)
+	zpkspan.Tag("span.type", sp.SpanType)
+	for _, tag := range sp.Tags {
+		zpkspan.Tag(tag.Key, fmt.Sprintf("%v", tag.Value))
+	}
+
+	if sp.dumpSize != 0 {
+		zpkspan.Tag("_dump_data", getRandomHexString(sp.dumpSize))
+	}
+
+	if len(sp.Error) != 0 {
+		zipkin.TagError.Set(zpkspan, sp.Error)
+	}
+
+	total := int64(sp.Duration * time.Millisecond)
+	d := rand.Int63n(total)
+	time.Sleep(time.Duration(d))
+	go func() {
+		time.Sleep(time.Duration(total - d))
+		zpkspan.Finish()
+	}()
+
+	return zpkspan, ctx
+}
+
 func main() {
 	go startAgent()
 
@@ -63,7 +91,7 @@ func main() {
 	if cfg.Encode == "json" {
 		serializer = reporter.JSONSerializer{}
 	} else {
-		serializer = pbserializer.SpanSerializer{}
+		serializer = zpkprotov2.SpanSerializer{}
 	}
 
 	reporter := NewReporter("http://"+agentAddress+zipv2, httpreporter.Serializer(serializer), httpreporter.BatchSize(1000))
@@ -83,16 +111,16 @@ func main() {
 	log.Printf("### span count: %d\n", spanCount)
 	log.Printf("### random dump: %v", cfg.RandomDump)
 	if cfg.RandomDump {
+		if cfg.DumpSize <= 0 {
+			cfg.DumpSize = rand.Intn(924) + 100
+		}
 		log.Printf("### dump size: 0kb~%dkb", cfg.DumpSize)
 	} else {
 		log.Printf("### dump size: %dkb", cfg.DumpSize)
 	}
 
-	var fillup int64
-	if cfg.DumpSize > 0 {
-		fillup = int64(cfg.DumpSize / spanCount)
-		fillup <<= 10
-		setPerDumpSize(cfg.Trace, fillup, cfg.RandomDump)
+	if cfg.DumpSize > 0 || cfg.DumpSize > 0 {
+		setPerDumpSize(cfg.Trace, int64(cfg.DumpSize/spanCount)<<10, cfg.RandomDump)
 	}
 
 	root, children := startRootSpan(tracer, cfg.Trace)
@@ -160,14 +188,14 @@ func startRootSpan(tracer *zipkin.Tracer, trace []*span) (root zipkin.Span, chil
 
 func orchestrator(tracer *zipkin.Tracer, ctx context.Context, children []*span) {
 	if len(children) == 1 {
-		ctx = startSpanFromContext(tracer, ctx, children[0])
+		_, ctx = children[0].startSpanFromContext(tracer, ctx)
 		if len(children[0].Children) != 0 {
 			orchestrator(tracer, ctx, children[0].Children)
 		}
 	} else {
 		for k := range children {
 			go func(ctx context.Context, span *span) {
-				ctx = startSpanFromContext(tracer, ctx, span)
+				_, ctx = span.startSpanFromContext(tracer, ctx)
 				if len(span.Children) != 0 {
 					orchestrator(tracer, ctx, span.Children)
 				}
@@ -183,30 +211,6 @@ func getRandomHexString(n int64) string {
 	return hex.EncodeToString(buf)
 }
 
-func startSpanFromContext(tracer *zipkin.Tracer, ctx context.Context, span *span) context.Context {
-	zipspan, ctx := tracer.StartSpanFromContext(ctx, span.Operation)
-
-	zipspan.Tag("resource.name", span.Resource)
-	zipspan.Tag("span.type", span.SpanType)
-	for _, tag := range span.Tags {
-		zipspan.Tag(tag.Key, fmt.Sprintf("%v", tag.Value))
-	}
-
-	if span.dumpSize != 0 {
-		zipspan.Tag("_dump_data", getRandomHexString(span.dumpSize))
-	}
-
-	if len(span.Error) != 0 {
-		zipspan.Tag("err", span.Error)
-	}
-
-	time.Sleep(span.Duration * time.Millisecond)
-
-	zipspan.Finish()
-
-	return ctx
-}
-
 func init() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -220,9 +224,14 @@ func init() {
 	if err = json.Unmarshal(data, cfg); err != nil {
 		log.Fatalln(err.Error())
 	}
+	if cfg.Sender == nil || cfg.Sender.Threads <= 0 || cfg.Sender.SendCount <= 0 {
+		log.Fatalln("sender not configured properly")
+	}
 	if len(cfg.Trace) == 0 {
 		log.Fatalln("empty trace")
 	}
+
+	globalCloser = make(chan struct{})
 
 	rand.Seed(time.Now().UnixNano())
 	agentAddress += strconv.Itoa(30000 + rand.Intn(10000))
